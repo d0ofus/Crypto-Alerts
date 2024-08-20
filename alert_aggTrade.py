@@ -25,6 +25,8 @@ from binance.websocket.um_futures.websocket_client import UMFuturesWebsocketClie
 from TelegramBot import sendMessage, sendScriptNotif
 from get_watchlist import setup_driver, get_symbols, close_driver
 
+#TODO: Run alert update after 30 mins initial one, then 5 mins thereafter
+
 current_directory = os.path.dirname(__file__)
 os.chdir(current_directory) 
 
