@@ -14,6 +14,10 @@ section = "KEY FOR TODAY"
 options = Options()
 options.add_argument('--headless')
 
+options.binary_location = "/usr/bin/headless-chromium"
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+
 driver = None
 
 def setup_driver():

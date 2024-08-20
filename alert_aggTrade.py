@@ -183,8 +183,7 @@ def update_alerts():
         update_message = default_message
         for symbol in symbols:
             symbol = symbol.upper()
-            # print(alert_frequency[symbol])
-            # print(f"{symbol}: {len(alert_frequency[symbol])}")
+      
             # Calculate total time and frequency
             if len(alert_frequency[symbol]) > 1:
                 total_time = alert_frequency[symbol][-1] - alert_frequency[symbol][0]
@@ -203,7 +202,6 @@ def update_alerts():
             #     # Gradually decrease threshold if alerts are infrequent
             #     alert_thresholds[symbol] = max(alert_thresholds[symbol] - 0.1, std_dev_treshold)
 
-            
             # Send update message
             update_message += f"<b>{symbol}</b>: {alerts_per_minute} / min | {alerts_per_hour} / hour \n"
         
