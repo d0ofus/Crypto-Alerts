@@ -1,9 +1,10 @@
 #!/bin/bash
 
-# Update package lists and install dependencies
-apt-get update
-apt-get install -y wget unzip ca-certificates fontconfig locales
+# Create a directory for the Chromium binary
+mkdir -p /tmp/chromium
 
-# Download and install headless-chromium
-wget https://github.com/adieuadieu/serverless-chrome/releases/download/v1.0.0-37/headless-chromium -O /usr/local/bin/headless-chromium
-chmod +x /usr/local/bin/headless-chromium
+# Download the pre-built headless-chromium binary
+wget https://github.com/adieuadieu/serverless-chrome/releases/download/v1.0.0-37/headless-chromium -O /tmp/chromium/headless-chromium
+
+# Make the binary executable
+chmod +x /tmp/chromium/headless-chromium
