@@ -25,8 +25,6 @@ from binance.websocket.um_futures.websocket_client import UMFuturesWebsocketClie
 from TelegramBot import sendMessage, sendScriptNotif
 from get_watchlist import setup_driver, get_symbols, close_driver
 
-#TODO: Keep track of num of alerts per min and regulate s.d. setting for specific tokens
-
 current_directory = os.path.dirname(__file__)
 os.chdir(current_directory) 
 
