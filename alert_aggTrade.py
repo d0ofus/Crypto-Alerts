@@ -25,6 +25,7 @@ from binance.websocket.um_futures.websocket_client import UMFuturesWebsocketClie
 from TelegramBot import sendMessage, sendScriptNotif
 from get_watchlist import setup_driver, get_symbols, close_driver
 
+#TODO: No alerts within the first 10 mins, start thereafter
 #TODO: Run alert update after 30 mins initial one, then 5 mins thereafter
 
 current_directory = os.path.dirname(__file__)
@@ -33,6 +34,7 @@ os.chdir(current_directory)
 # Input parameters
 std_dev_treshold = 5
 max_trade_len = 1000
+min_trade_count = 500
 update_symbol_interval = 600 #Interval (in seconds) between each symbol update
 update_alerts_interval = 120 #Interval (in seconds) between each alert frequency update
 
@@ -71,7 +73,7 @@ def insert_trade(symbol, timestamp, price, quantity):
     stats[symbol]["sum_quantity_squared"] += quantity**2
 
     # Calculate the average and standard deviation
-    if stats[symbol]["count"] > 1:
+    if stats[symbol]["count"] > min_trade_count: 
         avg_quantity = stats[symbol]["sum_quantity"] / stats[symbol]["count"]
         variance = (stats[symbol]["sum_quantity_squared"] / stats[symbol]["count"]) - (avg_quantity ** 2)
         std_dev = variance ** 0.5
@@ -203,7 +205,7 @@ def update_alerts():
             #     alert_thresholds[symbol] = max(alert_thresholds[symbol] - 0.1, std_dev_treshold)
 
             # Send update message
-            update_message += f"<b>{symbol}</b>: {alerts_per_minute} / min | {alerts_per_hour} / hour \n"
+            update_message += f"<b>{symbol}</b>: {alerts_per_minute} / min | {alerts_per_hour} / hour -> {alert_thresholds[symbol]} s.d. \n"
         
         # Send messag eif there are alerts
         if update_message != default_message:
