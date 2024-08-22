@@ -83,7 +83,6 @@ def insert_trade(symbol, timestamp, price, quantity):
         current_threshold = alert_thresholds[symbol]
         if quantity > avg_quantity + current_threshold * std_dev:
             alert(symbol, price, quantity, avg_quantity, std_dev, current_threshold)
-            print(stats[symbol]["count"])
 
 def format_number(value):
     if value >= 1_000_000_000:
