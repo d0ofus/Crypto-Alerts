@@ -34,7 +34,7 @@ os.chdir(current_directory)
 # Input parameters
 std_dev_treshold = 5
 max_trade_len = 1000
-min_trade_count = 500
+min_trade_count = 500 # Num of trades required before stats can be calculated and alerts sent
 update_symbol_interval = 600 #Interval (in seconds) between each symbol update
 update_alerts_interval = 120 #Interval (in seconds) between each alert frequency update
 
@@ -84,6 +84,7 @@ def insert_trade(symbol, timestamp, price, quantity):
         current_threshold = alert_thresholds[symbol]
         if quantity > avg_quantity + current_threshold * std_dev:
             alert(symbol, price, quantity, avg_quantity, std_dev, current_threshold)
+            print(stats[symbol]["count"])
 
 def format_number(value):
     if value >= 1_000_000_000:
@@ -144,6 +145,7 @@ def get_watchlist():
     watchlist = [symbol.split('.')[0].lower() for symbol in symbols if ".P" in symbol]
     return watchlist
 
+# Grabs symbols from TV watchlist, subscribe/unsubscribe to aggTrade streams, sends telegram update on symbol list and number of trades registered
 def update_symbols():
     global symbols, my_clients, trade_data, stats, alert_frequency, alert_thresholds
     while True:
@@ -181,7 +183,6 @@ def update_alerts():
     global symbols, alert_frequency, alert_thresholds
     default_message = "<b>[Update - Large Trade Alerts Frequency]</b>\n"
     while True:
-        print("---------- Processing Alert Frequencies --------")
         update_message = default_message
         for symbol in symbols:
             symbol = symbol.upper()
@@ -210,6 +211,8 @@ def update_alerts():
         # Send messag eif there are alerts
         if update_message != default_message:
             sendMessage(update_message)
+            print(">>>>>>> Alert Frequency Sent\n")
+
 
         time.sleep(update_alerts_interval)
     
