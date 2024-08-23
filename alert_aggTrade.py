@@ -25,6 +25,7 @@ from binance.websocket.um_futures.websocket_client import UMFuturesWebsocketClie
 from TelegramBot import sendMessage, sendScriptNotif
 from get_watchlist import setup_driver, get_symbols, close_driver
 
+#TODO: !!! Do not keep increasing s.d. if no alerts come through, if not it will just kep going up
 #TODO: Run alert update after 30 mins initial one, then 5 mins thereafter
 
 current_directory = os.path.dirname(__file__)
@@ -181,6 +182,8 @@ def update_alerts():
     global symbols, alert_frequency, alert_thresholds
     default_message = "<b>[Update - Large Trade Alerts Frequency]</b>\n"
     while True:
+        current_time = time.time()
+
         update_message = default_message
         for symbol in symbols:
             symbol = symbol.upper()
@@ -196,7 +199,9 @@ def update_alerts():
                 alerts_per_hour = 0
             
             # if alerts_per_minute > alert_limit_per_minute or alerts_per_hour > alert_limit_per_hour:
-            if alerts_per_hour > alert_limit_per_hour:
+            current_time = time.time()
+            time_delta = current_time - alert_frequency[symbol][-1]
+            if alerts_per_hour > alert_limit_per_hour and time_delta <= update_alerts_interval: # Make sure last alert came through during the alert update interval, else don't increase threshold
                 # Increase threshold to reduce alerts
                 alert_thresholds[symbol] += 1
             # else:

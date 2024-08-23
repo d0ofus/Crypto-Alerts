@@ -1,0 +1,28 @@
+Building a Docker Image
+1. Navigate to project directory 
+- cd C:\Users\ervin\Documents\Projects\Crypto\Alerts
+2. Build Docker image
+- docker build -t tradingview-alert-bot .
+3. Test
+3a. Run in interactive mode (locally)
+- docker run -it --rm tradingview-alert-bot /bin/bash
+3b. Type in commands to Check
+- Navigate to app folder --> cd /app
+- Display available files --> ls
+- Run python file --> python alert_aggTrade.py
+- Check google chrome and chromedriver versions 
+--> google-chrome --version
+--> chromedriver --version
+
+
+Rebuild Docker Image (If code change)
+1. Check images in docker
+- docker images
+2. Stop running images
+- docker stop <container_id>
+3. Force remove image
+- docker rmi -f tradingview-alert-bot
+4. Rebuild
+
+
+Useful commands

@@ -12,17 +12,17 @@ section = "KEY FOR TODAY"
 
 # Set up Selenium
 options = Options()
-options.add_argument('--headless')
 
-# options.binary_location = "/tmp/chromium/headless-chromium"
-# options.add_argument("--no-sandbox")
-# options.add_argument("--disable-gpu")
+options.add_argument("--headless")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
 
 
 driver = None
 
 def setup_driver():
     global driver
+    # driver = webdriver.Chrome(options=options)
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     driver.get(url)
     driver.implicitly_wait(15)
