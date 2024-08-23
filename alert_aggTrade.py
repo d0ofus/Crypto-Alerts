@@ -182,14 +182,14 @@ def update_alerts():
     global symbols, alert_frequency, alert_thresholds
     default_message = "<b>[Update - Large Trade Alerts Frequency]</b>\n"
     while True:
-        current_time = time.time()
-
         update_message = default_message
         for symbol in symbols:
             symbol = symbol.upper()
       
             # Calculate total time and frequency
             if len(alert_frequency[symbol]) > 1:
+                current_time = time.time()
+                time_delta = current_time - alert_frequency[symbol][-1]
                 total_time = alert_frequency[symbol][-1] - alert_frequency[symbol][0]
                 alert_rate = total_time / len(alert_frequency[symbol])  # average time between alerts
                 alerts_per_minute = round(60 / alert_rate if total_time > 0 else float('inf'), 2)
@@ -197,11 +197,11 @@ def update_alerts():
             else:
                 alerts_per_minute = 0
                 alerts_per_hour = 0
+                time_delta = 0
             
             # if alerts_per_minute > alert_limit_per_minute or alerts_per_hour > alert_limit_per_hour:
-            current_time = time.time()
-            time_delta = current_time - alert_frequency[symbol][-1]
-            if alerts_per_hour > alert_limit_per_hour and time_delta <= update_alerts_interval: # Make sure last alert came through during the alert update interval, else don't increase threshold
+            
+            if alerts_per_hour > alert_limit_per_hour and 0 < time_delta <= 600: # Make sure last alert came through during the alert update interval, else don't increase threshold
                 # Increase threshold to reduce alerts
                 alert_thresholds[symbol] += 1
             # else:

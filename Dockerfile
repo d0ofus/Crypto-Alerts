@@ -23,13 +23,10 @@ RUN apt-get update && \
 #     apt-get install -y google-chrome-stable && \
 #     rm -rf /var/lib/apt/lists/*
 
-# Install Google Chrome version 114.0.5735.90
-RUN wget -q https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_114.0.5735.90-1_amd64.deb && \
-    apt-get update && \
-    apt-get install -y ./google-chrome-stable_114.0.5735.90-1_amd64.deb && \
-    rm google-chrome-stable_114.0.5735.90-1_amd64.deb && \
-    rm -rf /var/lib/apt/lists/*
-    
+ENV CHROME_VERSION=114.0.5735.198-1
+RUN wget -q https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_${CHROME_VERSION}_amd64.deb
+RUN apt-get -y update
+RUN apt-get install -y ./google-chrome-stable_${CHROME_VERSION}_amd64.deb
 
 
 # Install ChromeDriver for a fixed version
