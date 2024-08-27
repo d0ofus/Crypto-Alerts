@@ -1,5 +1,7 @@
 import time
-from webdriver_manager.chrome import ChromeDriverManager
+
+# from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver import Chrome, ChromeOptions
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -11,28 +13,47 @@ url = "https://www.tradingview.com/watchlists/44936899/"
 section = "KEY FOR TODAY"
 
 # Set up Selenium
-options = Options()
+# options = Options()
+options = ChromeOptions()
 
 options.add_argument("--headless")
+options.add_argument('--disable-gpu')
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
-
 
 driver = None
 
 def setup_driver():
     global driver
-    # driver = webdriver.Chrome(options=options)
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    driver.get(url)
-    driver.implicitly_wait(15)
-    time.sleep(15)
+    try:
+        print("--------- Starting up selenium driver -------------")
+        driver = Chrome(options=options)
+        # driver = webdriver.Chrome(options=options)
+        driver.get(url)
+        driver.implicitly_wait(30)
+        time.sleep(30)
+
+        # Check if page loaded correctly
+        page_title = driver.title
+        print(f"Page loaded: {page_title}")
+
+        # Check if the driver is not None
+        if driver is None:
+            raise Exception("WebDriver initialization failed. Driver is None.")
+
+    except Exception as e:
+        print(f"Error starting ChromeDriver: {e}")
+        driver = None
 
 def get_symbols():
     print("--------- Extracting Symbols from TradingView Watchlist -------------")
     collecting_symbols = False
     filtered_symbols = []
     retry_count = 0
+
+    if driver is None:
+        print("Driver is not initialized. Exiting symbol extraction.")
+        return []
 
     try:
         # Get all elements in order

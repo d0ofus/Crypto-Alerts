@@ -1,24 +1,9 @@
-''' [WORKING]
-
-Sample output:
-{
-  "e": "aggTrade",  // Event type
-  "E": 123456789,   // Event time
-  "s": "BTCUSDT",    // Symbol
-  "a": 5933014,     // Aggregate trade ID
-  "p": "0.001",     // Price
-  "q": "100",       // Quantity
-  "f": 100,         // First trade ID
-  "l": 105,         // Last trade ID
-  "T": 123456785,   // Trade time
-  "m": true,        // Is the buyer the market maker?
-}
-'''
-
 import os
 import time
 import json
 import threading
+from threading import Thread
+
 from queue import Queue
 from collections import defaultdict, deque
 from binance.websocket.um_futures.websocket_client import UMFuturesWebsocketClient
@@ -26,31 +11,38 @@ from TelegramBot import sendMessage, sendScriptNotif
 from get_watchlist import setup_driver, get_symbols, close_driver
 from flask import Flask, jsonify, request
 
-#TODO: Run alert update after 30 mins initial one, then 5 mins thereafter
+#TODO: Clean up alert_frequency such that it doesn't build up memory endlessly
+#TODO: Force close connection
 
 current_directory = os.path.dirname(__file__)
-os.chdir(current_directory) 
+os.chdir(current_directory)
+
+app = Flask(__name__)
+
+# Global variables for threading and control
+streaming_active = False
+symbol_update_thread = None
+queue_thread = None
+alert_update_thread = None
+queue = Queue()
+my_clients = {}
+symbols = []
 
 # Input parameters
 std_dev_treshold = 5
 max_trade_len = 1500
 min_trade_count = 500 # Num of trades required before stats can be calculated and alerts sent
-update_symbol_interval = 600 #Interval (in seconds) between each symbol update
-update_alerts_interval = 120 #Interval (in seconds) between each alert frequency update
+update_symbol_interval = 600 # Interval (in seconds) between each symbol update
+update_alerts_interval = 120 # Interval (in seconds) between each alert frequency update
 
-# Dictionary to store trades, with each symbol as the key and deque to hold trade data
+# Dictionaries for trade data and alerts
 trade_data = defaultdict(lambda: deque(maxlen=max_trade_len))
-stats = defaultdict(lambda: {"count": 0, "sum_quantity": 0, "sum_quantity_squared": 0, "avg_quantity": 0, "std_d ev": 0})
-
-# Dictionary to store alert frequencies and thresholds
+stats = defaultdict(lambda: {"count": 0, "sum_quantity": 0, "sum_quantity_squared": 0, "avg_quantity": 0, "std_dev": 0})
 alert_frequency = defaultdict(lambda: deque())
-alert_thresholds = defaultdict(lambda: std_dev_treshold)  # Store the current threshold for each symbol
-alert_limit_per_minute = 5  # Define limits for alerts per minute
-alert_limit_per_hour = 30  # Define limits for alerts per hour
+alert_thresholds = defaultdict(lambda: std_dev_treshold)
+alert_limit_per_minute = 5
+alert_limit_per_hour = 30
 
-queue = Queue()
-my_clients = {}
-symbols = []
 
 # Insert trade into the dictionary
 def insert_trade(symbol, timestamp, price, quantity):
@@ -223,172 +215,55 @@ def update_alerts():
 
         time.sleep(update_alerts_interval)
     
-# Start process
-print("======= Initializing Large Trade Alerts ========")
+# Function to start alert streaming
+def start_streaming():
+    global streaming_active, symbol_update_thread, queue_thread, alert_update_thread
+    if streaming_active:
+        return
+    streaming_active = True
 
-# Start thread to update symbols periodically
-symbol_update_thread = threading.Thread(target=update_symbols)
-symbol_update_thread.start()
+    symbol_update_thread = Thread(target=update_symbols)
+    queue_thread = Thread(target=process_queue)
+    alert_update_thread = Thread(target=update_alerts)
 
-# Start thread to process the queue
-queue_thread = threading.Thread(target=process_queue)
-queue_thread.start()
+    symbol_update_thread.start()
+    queue_thread.start()
+    alert_update_thread.start()
 
-# Start thread to process the queue
-alert_update_thread = threading.Thread(target=update_alerts)
-alert_update_thread.start()
-
-# Keep the connection open
-try:
-    while True:
-        time.sleep(1)
-except KeyboardInterrupt:
-    for symbol in list(my_clients.keys()):
-        my_clients[symbol].stop()
-    queue.put(None)  # Signal the queue processing thread to exit
-    symbol_update_thread.join()
-    queue_thread.join()
-    alert_update_thread.join()
-
-
-
-''' Old code [WORKING]
-
-import os
-import time
-import json
-import threading
-from queue import Queue
-from collections import defaultdict, deque
-from binance.websocket.um_futures.websocket_client import UMFuturesWebsocketClient
-from TelegramBot import sendMessage, sendScriptNotif
-from get_watchlist import setup_driver, get_symbols, close_driver
-
-current_directory = os.path.dirname(__file__)
-os.chdir(current_directory) 
-
-# Input parameters
-std_dev_treshold = 6
-max_trade_len = 1000
-update_interval = 120 #Interval (in seconds) between each update
-
-# Dictionary to store trades, with each symbol as the key and deque to hold trade data
-trade_data = defaultdict(lambda: deque(maxlen=max_trade_len))
-stats = defaultdict(lambda: {"count": 0, "sum_quantity": 0, "sum_quantity_squared": 0, "avg_quantity": 0, "std_d ev": 0})
-
-# Insert trade into the dictionary
-def insert_trade(symbol, timestamp, price, quantity):
-    # Check if the deque is full (i.e., has 1000 entries)
-    if len(trade_data[symbol]) == max_trade_len:
-        # If deque is full, the oldest trade will be automatically removed, so adjust the stats
-        old_timestamp, old_price, old_quantity = trade_data[symbol][0]
-        
-        # Adjust the statistics by removing the contribution of the old trade
-        stats[symbol]["count"] -= 1
-        stats[symbol]["sum_quantity"] -= old_quantity
-        stats[symbol]["sum_quantity_squared"] -= old_quantity**2
-    
-    # Append the new trade to the deque
-    trade_data[symbol].append((timestamp, price, quantity))
-    
-    # Update running statistics with the new trade
-    stats[symbol]["count"] += 1
-    stats[symbol]["sum_quantity"] += quantity
-    stats[symbol]["sum_quantity_squared"] += quantity**2
-
-# Calculate the average and standard deviation
-if stats[symbol]["count"] > 1:
-    avg_quantity = stats[symbol]["sum_quantity"] / stats[symbol]["count"]
-    variance = (stats[symbol]["sum_quantity_squared"] / stats[symbol]["count"]) - (avg_quantity ** 2)
-    std_dev = variance ** 0.5
-    stats[symbol]["avg_quantity"] = avg_quantity
-    stats[symbol]["std_dev"] = std_dev
-
-    # Check if the new quantity is greater than X standard deviations from the average
-    if quantity > avg_quantity + std_dev_treshold * std_dev:
-        alert(symbol, price, quantity, avg_quantity, std_dev)
-
-def format_number(value):
-    if value >= 1_000_000_000:
-        return f"{value / 1_000_000_000:,.1f}B"
-    elif value >= 1_000_000:
-        return f"{value / 1_000_000:,.1f}M"
-    else:
-        return f"{value:,.1f}"
-
-def format_notional(value):
-    if value >= 1_000_000_000:
-        return f"{value / 1_000_000_000:.2f}B"
-    elif value >= 1_000_000:
-        return f"{value / 1_000_000:.2f}M"
-    elif value >= 1_000:
-        return f"{value / 1_000:.2f}K"
-    else:
-        return str(value)
-
-def alert(symbol, price, quantity, avg_quantity, std_dev):
-    notional = format_notional(price * quantity)
-    tele_message = '<b>[Large Trade] - ' + symbol + ': ' + str(price) + '</b>\n' \
-                    + 'Volume traded: ' + str(format_number(quantity)) + '\n' \
-                    + 'Notional: ' + notional + '\n' \
-                    + 'Average volume: ' + str(format_number(round(avg_quantity, 2))) + '\n' \
-                    + 'Std Dev: ' + str(format_number(round(std_dev, 2)))
-
-    sendMessage(tele_message)
-
-def message_handler(_, message):
-    if isinstance(message, str):
-        message = json.loads(message)
-    data = message['data']
-    queue.put(data)
-
-def process_queue():
-    while True:
-        data = queue.get()
-        if data is None:
-            break
-        symbol = data['s']
-        timestamp = int(data['T'])
-        price = float(data['p'])
-        quantity = float(data['q'])
-
-        # Insert trade into the dictionary and update statistics
-        insert_trade(symbol, timestamp, price, quantity)
-
-def process_update_thread():
-    while True:
-        update_message = "<b>[Update - Large Trade Alerts]</b>\n"
-        for symbol in symbols:
-            symbol = symbol.upper()
-            trade_count = stats[symbol]["count"]
-            update_message += f"{symbol}: {trade_count} trades\n"
-        sendMessage(update_message)
-        time.sleep(600)  # Sleep for 10 minutes
-
-queue = Queue()
-my_clients = {}
-symbols = ['tonusdt', 'zecusdt', 'linkusdt']
-
-# Start thread to periodically update ticker info
-update_thread = threading.Thread(target=process_update_thread)
-update_thread.start()
-
-for symbol in symbols:
-    my_clients[symbol] = UMFuturesWebsocketClient(on_message=message_handler, is_combined=True)
-    my_clients[symbol].subscribe(stream=f"{symbol}@aggTrade")
-
-# Keep the connection open
-try:
-    while True:
-        time.sleep(1)
-except KeyboardInterrupt:
-    for symbol in symbols:
-        my_clients[symbol].stop()
-    for symbol in symbols:
-        my_clients[symbol].close()
-    queue.put(None)  # Signal the queue processing thread to exit
-    symbol_update_thread.join()
-    queue_thread.join()
-    update_thread.join()
 
 '''
+Flask web app routes
+'''
+@app.route('/start', methods=['GET'])
+def start():
+    # start_streaming()
+    thread = Thread(target=start_streaming)
+    thread.start()
+    return jsonify({'status': 'streaming started'}), 200
+
+@app.route('/stop', methods=['GET'])
+def stop():
+    global streaming_active
+    if not streaming_active:
+        return jsonify({'status': 'not running'}), 400
+    
+    streaming_active = False
+    if symbol_update_thread:
+        symbol_update_thread.join()
+    if queue_thread:
+        queue_thread.join()
+    if alert_update_thread:
+        alert_update_thread.join()
+
+    for symbol in list(my_clients.keys()):
+        my_clients[symbol].stop()
+    
+    queue.put(None)  # Signal the queue processing thread to exit
+    return jsonify({'status': 'streaming stopped'}), 200
+
+@app.route('/')
+def index():
+    return "Alert Streaming Service up and running!"
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8000)

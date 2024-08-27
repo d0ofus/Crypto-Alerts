@@ -12,6 +12,7 @@ comm==0.2.2
 debugpy==1.8.5
 decorator==5.1.1
 executing==2.0.1
+Flask==3.0.3
 frozenlist==1.4.1
 h11==0.14.0
 idna==3.7
