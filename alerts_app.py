@@ -2,18 +2,16 @@ import os
 import time
 import json
 import threading
-from threading import Thread
-
 from queue import Queue
+from threading import Thread, Event
+
 from collections import defaultdict, deque
 from binance.websocket.um_futures.websocket_client import UMFuturesWebsocketClient
 from TelegramBot import sendMessage, sendScriptNotif
 from get_watchlist import setup_driver, get_symbols, close_driver
 from flask import Flask, jsonify, request
 
-#TODO: Clean up alert_frequency such that it doesn't build up memory endlessly
-#TODO: Force close connection
-
+# Set current directory
 current_directory = os.path.dirname(__file__)
 os.chdir(current_directory)
 
@@ -29,29 +27,29 @@ my_clients = {}
 symbols = []
 
 # Input parameters
-std_dev_treshold = 5
+std_dev_threshold = 5
 max_trade_len = 1500
-min_trade_count = 500 # Num of trades required before stats can be calculated and alerts sent
-update_symbol_interval = 600 # Interval (in seconds) between each symbol update
-update_alerts_interval = 120 # Interval (in seconds) between each alert frequency update
+min_trade_count = 500  # Num of trades required before stats can be calculated and alerts sent
+update_symbol_interval = 600  # Interval (in seconds) between each symbol update
+update_alerts_interval = 120  # Interval (in seconds) between each alert frequency update
 
 # Dictionaries for trade data and alerts
 trade_data = defaultdict(lambda: deque(maxlen=max_trade_len))
 stats = defaultdict(lambda: {"count": 0, "sum_quantity": 0, "sum_quantity_squared": 0, "avg_quantity": 0, "std_dev": 0})
 alert_frequency = defaultdict(lambda: deque())
-alert_thresholds = defaultdict(lambda: std_dev_treshold)
+alert_thresholds = defaultdict(lambda: std_dev_threshold)
 alert_limit_per_minute = 5
 alert_limit_per_hour = 30
 
+# Event objects for thread control
+stop_event = Event()
 
 # Insert trade into the dictionary
 def insert_trade(symbol, timestamp, price, quantity):
-    # Check if the deque is full (i.e., has 1000 entries)
+    # Check if the deque is full
     if len(trade_data[symbol]) == max_trade_len:
-        # If deque is full, the oldest trade will be automatically removed, so adjust the stats
-        old_timestamp, old_price, old_quantity = trade_data[symbol][0]
-        
         # Adjust the statistics by removing the contribution of the old trade
+        old_timestamp, old_price, old_quantity = trade_data[symbol][0]
         stats[symbol]["count"] -= 1
         stats[symbol]["sum_quantity"] -= old_quantity
         stats[symbol]["sum_quantity_squared"] -= old_quantity**2
@@ -117,17 +115,19 @@ def message_handler(_, message):
     queue.put(data)
 
 def process_queue():
-    while True:
+    while not stop_event.is_set():
         data = queue.get()
         if data is None:
             break
-        symbol = data['s'] # !!! Gives upper case symbol, which feeds as the key to all local dictionaries
+        symbol = data['s']  # Upper case symbol
         timestamp = int(data['T'])
         price = float(data['p'])
         quantity = float(data['q'])
 
         # Insert trade into the dictionary and update statistics
         insert_trade(symbol, timestamp, price, quantity)
+    
+    print("Queue processing thread has stopped.")
 
 def get_watchlist():
     setup_driver()
@@ -136,11 +136,10 @@ def get_watchlist():
     watchlist = [symbol.split('.')[0].lower() for symbol in symbols if ".P" in symbol]
     return watchlist
 
-# Grabs symbols from TV watchlist, subscribe/unsubscribe to aggTrade streams, sends telegram update on symbol list and number of trades registered
 def update_symbols():
     global symbols, my_clients, trade_data, stats, alert_frequency, alert_thresholds
     init_message = "<b>[Update - Large Trade Alerts Symbols]</b>\n"
-    while True:
+    while not stop_event.is_set():
         update_symbol_message = init_message
         new_symbols = get_watchlist()
         # Handle unsubscribing from symbols no longer in the list
@@ -173,12 +172,14 @@ def update_symbols():
             sendMessage(update_symbol_message)
             print(">>>>>>> Alert Symbols Sent\n")
 
-        time.sleep(update_symbol_interval)
+        stop_event.wait(update_symbol_interval)
+
+    print("Update symbols processing thread has stopped.")
 
 def update_alerts():
     global symbols, alert_frequency, alert_thresholds
     default_message = "<b>[Update - Large Trade Alerts Frequency]</b>\n"
-    while True:
+    while not stop_event.is_set():
         update_message = default_message
         for symbol in symbols:
             symbol = symbol.upper()
@@ -195,25 +196,21 @@ def update_alerts():
                 alerts_per_minute = 0
                 alerts_per_hour = 0
                 time_delta = 0
-            
-            # if alerts_per_minute > alert_limit_per_minute or alerts_per_hour > alert_limit_per_hour:
-            
-            if alerts_per_hour > alert_limit_per_hour and 0 < time_delta <= 600: # Make sure last alert came through during the alert update interval, else don't increase threshold
-                # Increase threshold to reduce alerts
-                alert_thresholds[symbol] += 1
-            # else:
-            #     # Gradually decrease threshold if alerts are infrequent
-            #     alert_thresholds[symbol] = max(alert_thresholds[symbol] - 0.1, std_dev_treshold)
+                        
+            if alerts_per_hour > alert_limit_per_hour and 0 < time_delta <= 600:  # Ensure last alert was recent
+                alert_thresholds[symbol] += 1  # Increase threshold to reduce alerts
 
             # Send update message
             update_message += f"<b>{symbol}</b>: {alerts_per_minute} / min | {alerts_per_hour} / hour -> ({alert_thresholds[symbol]} s.d.) \n"
         
-        # Send messag eif there are alerts
         if update_message != default_message:
             sendMessage(update_message)
             print(">>>>>>> Alert Frequency Sent\n")
 
-        time.sleep(update_alerts_interval)
+        stop_event.wait(update_alerts_interval)
+
+    print("Update frequency processing thread has stopped.")
+
     
 # Function to start alert streaming
 def start_streaming():
@@ -222,48 +219,55 @@ def start_streaming():
         return
     streaming_active = True
 
-    symbol_update_thread = Thread(target=update_symbols)
-    queue_thread = Thread(target=process_queue)
-    alert_update_thread = Thread(target=update_alerts)
+    symbol_update_thread = Thread(target=update_symbols, daemon=True)
+    queue_thread = Thread(target=process_queue, daemon=True)
+    alert_update_thread = Thread(target=update_alerts, daemon=True)
 
     symbol_update_thread.start()
     queue_thread.start()
     alert_update_thread.start()
 
-
-'''
-Flask web app routes
-'''
 @app.route('/start', methods=['GET'])
 def start():
-    # start_streaming()
-    thread = Thread(target=start_streaming)
+    thread = threading.Thread(target=start_streaming)
     thread.start()
-    return jsonify({'status': 'streaming started'}), 200
+    return jsonify({"status": "Streaming started."})
 
 @app.route('/stop', methods=['GET'])
 def stop():
-    global streaming_active
-    if not streaming_active:
-        return jsonify({'status': 'not running'}), 400
-    
-    streaming_active = False
-    if symbol_update_thread:
-        symbol_update_thread.join()
-    if queue_thread:
-        queue_thread.join()
-    if alert_update_thread:
-        alert_update_thread.join()
+    global stop_event, streaming_active, queue, my_clients, trade_data, stats, alert_frequency, alert_thresholds
 
-    for symbol in list(my_clients.keys()):
-        my_clients[symbol].stop()
+    stop_event.set()
+    if streaming_active:
+        stop_event.clear()
+        streaming_active = False
     
-    queue.put(None)  # Signal the queue processing thread to exit
-    return jsonify({'status': 'streaming stopped'}), 200
+    # Forcefully stop WebSocket clients
+    for symbol in list(my_clients.keys()):
+        try:
+            my_clients[symbol].stop()
+            my_clients[symbol].ws.close()
+        except Exception as e:
+            print(f"Error stopping client {symbol}: {e}")
+    
+    # Signal the queue processing thread to exit
+    queue.put(None)
+
+    # Clear all data structures
+    my_clients.clear()
+    trade_data.clear()
+    stats.clear()
+    alert_frequency.clear()
+    alert_thresholds.clear()
+
+    # Reset the queue to a new instance
+    queue = Queue()
+
+    return jsonify({"status": "Streaming stopped."})
 
 @app.route('/')
 def index():
     return "Alert Streaming Service up and running!"
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8000)

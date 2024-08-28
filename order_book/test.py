@@ -1,20 +1,16 @@
-import requests
 import time
-from collections import defaultdict, deque
+import requests
+from collections import defaultdict
+# from binance.websocket.um_futures.websocket_client import UMFuturesWebsocketClient
+# from TelegramBot import sendMessage, sendScriptNotif
 
-#TODO: Stream current prices and alert if price is X% from big level
 #TODO: If price of big levels too far (X%) away from current price, reduce depth limit 
-
-# Telegram bot configuration
-BOT_TOKEN = 'your-telegram-bot-token'
-CHAT_ID = 'your-telegram-chat-id'
 
 # Binance API configuration
 symbols = ['TAOUSDT', 'RENDERUSDT']
 max_levels = defaultdict(list)
 DEPTH_LIMIT = 1000
-CHECK_INTERVAL = 60  # Fetch the order book every 60 seconds
-# LIQUIDITY_THRESHOLD = 100  # Example threshold for large liquidity
+CHECK_INTERVAL = 10 
 
 def fetch_order_book(symbol, limit):
     url = f'https://fapi.binance.com/fapi/v1/depth?symbol={symbol}&limit={limit}'
@@ -39,12 +35,33 @@ def find_max_liquidity_level(order_book):
         quantity = float(ask[1])
         if quantity > max_ask['quantity']:
             max_ask = {'price': price, 'quantity': quantity}
-
+    print(max_bid, max_ask)
     return max_bid, max_ask
+
+def find_bbo(order_book):
+    best_bid = {'price': float(order_book['bids'][0][0]), 
+               'quantity': float(order_book['bids'][0][1])}
+    best_ask = {'price': float(order_book['asks'][0][0]), 
+               'quantity': float(order_book['asks'][0][1])}
+
+    print(best_bid, best_ask)
+    return best_bid, best_ask
+
+def calc_pct(best_bid, best_ask, max_bid, max_ask):
+    bid_diff = best_bid['price']/max_bid['price'] - 1
+    ask_diff = max_ask['price']/best_ask['price'] - 1
+    print(bid_diff, ask_diff)
+    return bid_diff, ask_diff
+
+
+symbol = 'taousdt'
+
 
 def analyze_and_alert(symbol):
     order_book = fetch_order_book(symbol, DEPTH_LIMIT)
     max_bid, max_ask = find_max_liquidity_level(order_book)
+    best_bid, best_ask = find_bbo(order_book)
+    bid_diff, ask_diff = calc_pct(best_bid, best_ask, max_bid, max_ask)
 
     max_levels[symbol]=(max_bid, max_ask)  # Append the tuple of max_bid and max_ask
 
@@ -61,7 +78,6 @@ def analyze_and_alert(symbol):
     # # Send alerts if any
     # for message in alert_messages:
     #     send_telegram_message(message)
-    
 
 def main():
     while True:

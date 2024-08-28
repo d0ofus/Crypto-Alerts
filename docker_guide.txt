@@ -4,6 +4,10 @@ Building a Docker Image
 
 2. Build Docker image
 - docker build -t alert-bot .
+Notes:
+- Can override current repository with same command i.e.:
+docker build -t d00fus/alert-bot:latest .
+docker push d00fus/alert-bot:latest
 
 3. Test
 3a. Run in interactive mode (locally)
@@ -21,6 +25,8 @@ Building a Docker Image
 4. Push to Docker Hub
 docker tag alert-bot d00fus/alert-bot:latest
 docker push d00fus/alert-bot:latest
+Notes:
+- Can push to existing docker hub repository and it will override with changes
 
 
 Rebuild Docker Image (If code change)

@@ -30,7 +30,7 @@ RUN pip install -r requirements.txt
 # CMD ["python", "alert_aggTrade.py"]
 
 # For testing purposes
-CMD ["python", "test_alert.py"] 
+CMD ["python", "alerts_app.py"] 
 
 
 #%% -----------------------------------------------------------------------------------------
