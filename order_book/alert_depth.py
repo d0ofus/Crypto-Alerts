@@ -1,24 +1,26 @@
-import os, sys
+import os
 import time
 import requests
+from threading import Thread
 from collections import defaultdict
 from flask import Flask, jsonify, request
+from TelegramBot import sendMessage
+from get_watchlist import setup_driver, get_symbols, close_driver
 
 current_directory = os.path.dirname(__file__)
 os.chdir(current_directory)
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) # Get the parent directory
-sys.path.insert(0, parent_dir) # Add the parent directory to sys.path
-
-from TelegramBot import sendMessage
 
 #TODO: Alert if above X s.d. of normal size + within 2%
 #TODO: Grab symbols from watchlist
 #TODO: Make this function callable through the flask app on koyeb for any given ticker
+#TODO: Combine into one alert message
 
-# app = Flask(__name__)
+app = Flask(__name__)
 
+symbols = ['ETHUSDT', 'TAOUSDT']
+alerts_active = False
 max_levels = defaultdict(list)
-CHECK_INTERVAL = 20 
+CHECK_INTERVAL = 30 
 THRESHOLD_DIFF = 0.03 # In % terms
 VALID_DEPTH_LIMITS = [5, 10, 20, 50, 100, 500, 1000]
 
@@ -113,21 +115,51 @@ def analyze_and_alert(symbol):
     max_levels[symbol] = (best_max['bid'], best_max['ask'])  # Append the tuple of max_bid and max_ask
     send_message(symbol, mid_px, best_max['bid'], best_max['ask'], best_diff['bid'], best_diff['ask'])
 
-def main():
-    while True:
+def run_alerts():
+    global symbols
+    while alerts_active:
         for symbol in symbols:
             analyze_and_alert(symbol)
-        print(max_levels)
         time.sleep(CHECK_INTERVAL)
 
+
+'''
+Flask web app routes
+'''
+@app.route('/start')
+def start_alerts():
+    global alerts_active
+    if alerts_active == False:
+        alerts_active = True
+    else:
+        return
+    thread = Thread(target=run_alerts)
+    thread.start()
+    return jsonify({"message": "Large book depth alerts started"}), 200
+
+@app.route('/stop')
+def stop_alerts():
+    global alerts_active, max_levels
+    alerts_active = False
+    max_levels.clear()
+    return jsonify({"message": "Large book depth alerts stopped"}), 200
+
+@app.route('/')
+def index():
+    return "Large Book Depth Alert Service up and running!"
+
+## Individual symbol
 # @app.route('/symbol', methods=['GET'])
-# def start():
+# def get_symbol(symbol):
 #     analyze_and_alert(symbol)
 #     return jsonify({"Symbol": "Generating max depth."})
 
 if __name__ == "__main__":
-    symbols = ['APTUSDT', 'SOLUSDT', 'ASTRUSDT']
-    main()
+    app.run(host='0.0.0.0', port=8000)
+    
+# if __name__ == "__main__":
+#     symbols = ['APTUSDT', 'SOLUSDT', 'ASTRUSDT']
+#     main()
 
 # #%% Testing
 # symbol = 'SOLUSDT'

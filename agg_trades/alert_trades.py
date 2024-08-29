@@ -1,10 +1,8 @@
 import os
 import time
 import json
-import threading
 from queue import Queue
 from threading import Thread, Event
-
 from collections import defaultdict, deque
 from binance.websocket.um_futures.websocket_client import UMFuturesWebsocketClient
 from TelegramBot import sendMessage, sendScriptNotif
@@ -214,10 +212,12 @@ def update_alerts():
     
 # Function to start alert streaming
 def start_streaming():
-    global streaming_active, symbol_update_thread, queue_thread, alert_update_thread
+    global streaming_active, stop_event, symbol_update_thread, queue_thread, alert_update_thread
     if streaming_active:
         return
     streaming_active = True
+
+    stop_event = Event()  # Reset the stop_event to a new instance
 
     symbol_update_thread = Thread(target=update_symbols, daemon=True)
     queue_thread = Thread(target=process_queue, daemon=True)

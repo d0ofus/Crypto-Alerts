@@ -27,10 +27,7 @@ WORKDIR /app
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-# CMD ["python", "alert_aggTrade.py"]
-
-# For testing purposes
-CMD ["python", "alerts_app.py"] 
+CMD ["python", "alert_trades.py"] 
 
 
 #%% -----------------------------------------------------------------------------------------
