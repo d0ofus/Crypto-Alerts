@@ -227,21 +227,21 @@ def start_streaming():
     queue_thread.start()
     alert_update_thread.start()
 
-@app.route('/start', methods=['GET'])
-def start():
-    thread = threading.Thread(target=start_streaming)
-    thread.start()
-    return jsonify({"status": "Streaming started."})
-
-@app.route('/stop', methods=['GET'])
-def stop():
+# Function to stop alert streaming
+def stop_streaming():
     global stop_event, streaming_active, queue, my_clients, trade_data, stats, alert_frequency, alert_thresholds
-
-    stop_event.set()
-    if streaming_active:
+    if not streaming_active:
+        return
+    elif streaming_active:
+        print("Streaming active, closing it now")
         stop_event.clear()
         streaming_active = False
-    
+
+    stop_event.set()  # Signal all threads to stop
+    symbol_update_thread.join()
+    queue_thread.join()
+    alert_update_thread.join()
+
     # Forcefully stop WebSocket clients
     for symbol in list(my_clients.keys()):
         try:
@@ -250,9 +250,6 @@ def stop():
         except Exception as e:
             print(f"Error stopping client {symbol}: {e}")
     
-    # Signal the queue processing thread to exit
-    queue.put(None)
-
     # Clear all data structures
     my_clients.clear()
     trade_data.clear()
@@ -263,6 +260,18 @@ def stop():
     # Reset the queue to a new instance
     queue = Queue()
 
+    print(">>> Large Trade Alerts streaming has stopped!")
+
+@app.route('/start', methods=['GET'])
+def start():
+    # thread = threading.Thread(target=start_streaming)
+    # thread.start()
+    start_streaming()
+    return jsonify({"status": "Streaming started."})
+
+@app.route('/stop', methods=['GET'])
+def stop():
+    stop_streaming()
     return jsonify({"status": "Streaming stopped."})
 
 @app.route('/')
